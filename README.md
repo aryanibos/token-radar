@@ -10,7 +10,7 @@ Token Radar (model radar-2): the pre-token protocols in a sealed DefiLlama snaps
 
 The board covers all 40 watchlist protocols (TVL at or above $50M, no token on record) plus 160 early pre-token protocols below the floor, for 200 rows. Implied value is TVL times a category comparable multiple — the median market-cap / TVL of live tokens in the same category, winsorised at x1.00, shrunk toward the market median with a prior weight of 8, clamped to [x0.08, x0.45] — adjusted for 7-day growth, age with no token, and chain breadth. No protocol name is special-cased. Live-token protocols are set aside with their market caps shown, never mixed into the ranking.
 
-The dashboard is a static page with no network: a sortable, filterable board, a detail view for every protocol with its model breakdown and 7-step farm plan, a live-token view, and a comparables table listing every category's live-token multiple.
+The dashboard is a static page with no network: a sortable, filterable board, a detail view for every protocol with its model breakdown and 8-step farm plan, a live-token view, and a comparables table listing every category's live-token multiple.
 
 ## How to read the board
 
