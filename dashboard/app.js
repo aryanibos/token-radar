@@ -27,6 +27,12 @@
     if (days >= 365) return (days / 365).toFixed(1) + 'y';
     return Math.max(0, Math.round(days)) + 'd';
   }
+  // The board's Age column shows days for every row, so the column reads in one unit;
+  // the drawer keeps the friendlier years form, and the cell's tooltip names it.
+  function fmtAgeDays(days) {
+    if (days === null || days === undefined) return 'unknown';
+    return Math.max(0, Math.round(days)) + 'd';
+  }
   function fmtMult(n) {
     if (n === null || n === undefined || !isFinite(n)) return 'n/a';
     return 'x' + n.toFixed(3);
@@ -308,6 +314,10 @@
     if (sorted.length % 2 === 1) return sorted[mid];
     return (sorted[mid - 1] + sorted[mid]) / 2;
   }
+  // Median seven-day growth across the board, for the qualifier under the fastest-growth cell.
+  function medianGrowth7d() {
+    return medianOf(DATA.rows.filter(function (r) { return r.change_7d !== null; }).map(function (r) { return r.change_7d; })) || 0;
+  }
   // The board's headline numbers, from the summary main.ts computes: the largest category,
   // the median implied values, the fastest growth and the largest TVL.
   function summaryBar() {
@@ -317,7 +327,7 @@
       el('div', { class: 'fact' }, el('span', { text: 'Largest category on the board' }), el('b', { text: s.top_category + ' (' + s.top_category_rows + ' rows)' })),
       el('div', { class: 'fact' }, el('span', { text: 'Median implied value, whole board' }), el('b', { text: fmtUsd(s.median_implied_usd) })),
       el('div', { class: 'fact' }, el('span', { text: 'Median implied value, watchlist' }), el('b', { text: fmtUsd(s.watchlist_median_implied_usd) })),
-      el('div', { class: 'fact' }, el('span', { text: 'Fastest seven-day growth' }), el('b', { text: (s.fastest_growth_name || 'n/a') + ' ' + fmtPct(s.fastest_growth_pct) })),
+      el('div', { class: 'fact' }, el('span', { text: '7d growth leader' }), el('b', { text: (s.fastest_growth_name || 'n/a') + ' ' + fmtPct(s.fastest_growth_pct) }), el('span', { class: 'qual', text: 'Board median 7d growth ' + fmtPct(medianGrowth7d()) + ' — an outlier from a low base' })),
       el('div', { class: 'fact' }, el('span', { text: 'Largest TVL on the board' }), el('b', { text: s.top_tvl_name || 'n/a' })),
       el('div', { class: 'fact' }, el('span', { text: 'Median TVL, watchlist' }), el('b', { text: fmtUsd(medianOf(DATA.rows.filter(function (r) { return r.tvl_usd >= DATA.floor_usd; }).map(function (r) { return r.tvl_usd; })) || 0) }))
     );
@@ -362,11 +372,11 @@
     );
   }
 
-  function sortHeader(key, label) {
+  function sortHeader(key, label, invert, title) {
     return el('th', { scope: 'col' },
-      el('button', { type: 'button', onclick: function () { if (state.sort === key) state.dir = -state.dir; else { state.sort = key; state.dir = -1; } render(); } },
+      el('button', { type: 'button', title: title || null, onclick: function () { if (state.sort === key) state.dir = -state.dir; else { state.sort = key; state.dir = -1; } render(); } },
         label,
-        state.sort === key ? el('span', { 'aria-hidden': 'true', text: state.dir < 0 ? ' v' : ' ^' }) : null
+        state.sort === key ? el('span', { 'aria-hidden': 'true', text: state.dir < 0 ? (invert ? ' ∧' : ' ∨') : (invert ? ' ∨' : ' ∧') }) : null
       )
     );
   }
@@ -398,27 +408,27 @@
         )),
         el('td', { class: 'num', text: fmtUsd(r.tvl_usd) }),
         el('td', { class: 'num ' + growthClass, text: growth }),
-        el('td', { class: 'num', text: fmtAge(r.age_days) }),
+        el('td', { class: 'num', title: r.age_days === null ? null : 'About ' + (r.age_days / 365).toFixed(1) + ' years with no token', text: fmtAgeDays(r.age_days) }),
         el('td', { class: 'num', text: fmtMult(r.comparable_multiple) }),
         el('td', null, el('div', { class: 'implied' },
           el('div', { class: 'bar', 'aria-hidden': 'true' }, el('i', { style: 'width:' + Math.max(3, Math.round((r.implied_value_usd / max) * 100)) + '%' })),
           el('span', { class: 'num', text: fmtUsd(r.implied_value_usd) })
         )),
-        el('td', null, el('span', { class: 'status', text: 'no token' }))
+        el('td', null, el('span', { class: 'status', text: 'Pre-token' }))
       );
       tbody.appendChild(tr);
     });
     return el('div', { class: 'panel' },
       el('div', { class: 'table-wrap' },
-        el('table', null,
+        el('table', { class: 'board' },
           el('caption', { class: 'sub', text: 'Pre-token protocols, strongest implied value first. Select a row for its model and farm plan.' }),
           el('thead', null, el('tr', null,
-            sortHeader('implied', 'Rank'),
+            sortHeader('implied', 'Rank', true),
             sortHeader('name', 'Protocol'),
             sortHeader('tvl', 'TVL'),
             sortHeader('growth', '7d'),
             sortHeader('age', 'Age'),
-            sortHeader('comp', 'Comp x'),
+            sortHeader('comp', 'Multiple', false, 'Comparable multiple: median market cap / TVL of live tokens in the category'),
             sortHeader('implied', 'Implied value'),
             el('th', { scope: 'col', text: 'Token' })
           )),
@@ -494,7 +504,7 @@
   }
 
   var dialog = el('dialog', { class: 'detail', id: 'detail', 'aria-labelledby': 'detail-title' });
-  dialog.addEventListener('close', function () { state.selected = null; writeHash(); });
+  dialog.addEventListener('close', function () { state.selected = null; document.body.classList.remove('drawer-open'); writeHash(); });
 
   function openDetail(slug) {
     var row = DATA.rows.filter(function (r) { return r.slug === slug; })[0];
@@ -524,7 +534,7 @@
         el('div', null, el('span', { text: 'Breadth multiplier' }), el('b', { class: 'num', text: String((row.breadth_multiplier || 0).toFixed(4)) })),
         el('div', null, el('span', { text: 'Implied value' }), el('b', { class: 'num', text: fmtUsd(row.implied_value_usd) }))
       ),
-      el('p', { class: 'sub', text: 'Model ' + DATA.model_version + ': the same function scores every protocol. The page recomputes this row as ' + fmtUsd(impliedOf(row)) + (impliedOf(row) === row.implied_value_usd ? ', the same number board.json carries.' : ', which differs from the board: the data would be stale.') + ' This is an estimate, not a price. It says the protocol records no token, never that it has none.' })
+      el('p', { class: 'sub disclaimer', text: 'Model ' + DATA.model_version + ': the same function scores every protocol. The page recomputes this row as ' + fmtUsd(impliedOf(row)) + (impliedOf(row) === row.implied_value_usd ? ', the same number board.json carries.' : ', which differs from the board: the data would be stale.') + ' This is an estimate, not a price. It says the protocol records no token, never that it has none.' })
     ));
     var catRank = categoryRank(row);
     dialog.appendChild(el('section', { class: 'detail-section' },
@@ -555,6 +565,8 @@
         return el('li', null, el('b', { text: action }), el('span', { class: 'cost', text: tail }));
       }))
     ));
+    dialog.appendChild(el('div', { class: 'fade', 'aria-hidden': 'true' }));
+    document.body.classList.add('drawer-open');
     if (typeof dialog.showModal === 'function') {
       if (!dialog.open) dialog.showModal();
     } else {
